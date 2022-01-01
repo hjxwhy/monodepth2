@@ -11,3 +11,4 @@ models
 core.*
 splits/
 build/
+.idea/
