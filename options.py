@@ -34,7 +34,7 @@ class MonodepthOptions:
         self.parser.add_argument("--split",
                                  type=str,
                                  help="which training split to use",
-                                 choices=["eigen_zhou", "eigen_full", "odom", "benchmark", "uav", "sim"],
+                                 choices=["eigen_zhou", "eigen_full", "odom", "benchmark", "uav", "sim","africa"],
                                  default="eigen_zhou")
         self.parser.add_argument("--num_layers",
                                  type=int,
@@ -82,6 +82,9 @@ class MonodepthOptions:
                                  type=int,
                                  help="frames to load",
                                  default=[0, -1, 1])
+        self.parser.add_argument("--use_sparse",
+                                 help="use sparse depth for depth completion",
+                                 action="store_true")
 
         # OPTIMIZATION options
         self.parser.add_argument("--batch_size",

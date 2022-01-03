@@ -9,7 +9,7 @@ from torch.nn import functional as F
 from torch.utils.data import DataLoader
 
 from layers import disp_to_depth
-from utils import readlines, printc
+from utils import readlines
 from options import MonodepthOptions
 import datasets
 import networks

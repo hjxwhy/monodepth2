@@ -21,8 +21,12 @@ class ResNetMultiImageInput(models.ResNet):
     def __init__(self, block, layers, num_classes=1000, num_input_images=1):
         super(ResNetMultiImageInput, self).__init__(block, layers)
         self.inplanes = 64
-        self.conv1 = nn.Conv2d(
-            num_input_images * 3, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        if num_input_images == 1.5:
+            self.conv1 = nn.Conv2d(
+                4, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        else:
+            self.conv1 = nn.Conv2d(
+                num_input_images * 3, 64, kernel_size=7, stride=2, padding=3, bias=False)
         self.bn1 = nn.BatchNorm2d(64)
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
@@ -50,11 +54,12 @@ def resnet_multiimage_input(num_layers, pretrained=False, num_input_images=1):
     blocks = {18: [2, 2, 2, 2], 50: [3, 4, 6, 3]}[num_layers]
     block_type = {18: models.resnet.BasicBlock, 50: models.resnet.Bottleneck}[num_layers]
     model = ResNetMultiImageInput(block_type, blocks, num_input_images=num_input_images)
-
     if pretrained:
         loaded = model_zoo.load_url(models.resnet.model_urls['resnet{}'.format(num_layers)])
-        loaded['conv1.weight'] = torch.cat(
-            [loaded['conv1.weight']] * num_input_images, 1) / num_input_images
+        loaded['conv1.weight'] = model.conv1.weight
+        # loaded['conv1.weight'] = torch.cat(
+        #     [loaded['conv1.weight']] * num_input_images, 1) / num_input_images
+
         model.load_state_dict(loaded)
     return model
 

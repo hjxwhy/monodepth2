@@ -52,7 +52,8 @@ class Trainer:
             self.opt.frame_ids.append("s")
 
         self.models["encoder"] = networks.ResnetEncoder(
-            self.opt.num_layers, self.opt.weights_init == "pretrained")
+            self.opt.num_layers, self.opt.weights_init == "pretrained",
+            num_input_images=1 if not self.opt.use_sparse else 1.5)
         self.models["encoder"].to(self.device)
         self.parameters_to_train += list(self.models["encoder"].parameters())
 
@@ -77,6 +78,8 @@ class Trainer:
                     num_frames_to_predict_for=2)
 
             elif self.opt.pose_model_type == "shared":
+                assert self.opt.pose_model_type == 'shared' and not self.opt.use_sparse, \
+                    'use sparse completion can\'t use shared model'
                 self.models["pose"] = networks.PoseDecoder(
                     self.models["encoder"].num_ch_enc, self.num_pose_frames)
 
@@ -233,6 +236,7 @@ class Trainer:
             inputs[key] = ipt.to(self.device)
 
         if self.opt.pose_model_type == "shared":
+            assert self.opt.pose_model_type == 'shared' and not self.opt.use_sparse, 'use sparse completion can\'t use shared model'
             # If we are using a shared encoder for both depth and pose (as advocated
             # in monodepthv1), then all images are fed separately through the depth encoder.
             all_color_aug = torch.cat([inputs[("color_aug", i, 0)] for i in self.opt.frame_ids])
@@ -246,7 +250,11 @@ class Trainer:
             outputs = self.models["depth"](features[0])
         else:
             # Otherwise, we only feed the image with frame_id 0 through the depth encoder
-            features = self.models["encoder"](inputs["color_aug", 0, 0])
+            input_data = inputs['color_aug', 0, 0]
+            if self.opt.use_sparse:
+                input_data = torch.cat([input_data, inputs['sparse']], dim=1)
+            # features = self.models["encoder"](inputs["color_aug", 0, 0])
+            features = self.models["encoder"](input_data)
             outputs = self.models["depth"](features)
 
         if self.opt.predictive_mask:
@@ -365,7 +373,6 @@ class Trainer:
 
                 # from the authors of https://arxiv.org/abs/1712.00175
                 if self.opt.pose_model_type == "posecnn":
-
                     axisangle = outputs[("axisangle", 0, frame_id)]
                     translation = outputs[("translation", 0, frame_id)]
 
@@ -480,7 +487,7 @@ class Trainer:
 
             if not self.opt.disable_automasking:
                 outputs["identity_selection/{}".format(scale)] = (
-                    idxs > identity_reprojection_loss.shape[1] - 1).float()
+                        idxs > identity_reprojection_loss.shape[1] - 1).float()
 
             loss += to_optimise.mean()
 
@@ -532,9 +539,9 @@ class Trainer:
         samples_per_sec = self.opt.batch_size / duration
         time_sofar = time.time() - self.start_time
         training_time_left = (
-            self.num_total_steps / self.step - 1.0) * time_sofar if self.step > 0 else 0
+                                     self.num_total_steps / self.step - 1.0) * time_sofar if self.step > 0 else 0
         print_string = "epoch {:>3} | batch {:>6} | examples/s: {:5.1f}" + \
-            " | loss: {:.5f} | time elapsed: {} | time left: {}"
+                       " | loss: {:.5f} | time elapsed: {} | time left: {}"
         print(print_string.format(self.epoch, batch_idx, samples_per_sec, loss,
                                   sec_to_hm_str(time_sofar), sec_to_hm_str(training_time_left)))
 

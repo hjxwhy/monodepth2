@@ -4,8 +4,10 @@ import PIL.Image as pil
 import random
 import torch
 from torchvision import transforms
+import cv2
 
 from .mono_dataset import MonoDataset
+from tools.add_noise import add_gausian_noise
 
 
 class UAVDataset(MonoDataset):
@@ -21,12 +23,15 @@ class UAVDataset(MonoDataset):
         # If your principal point is far from the center you might need to disable the horizontal
         # flip augmentation.
         self.K = np.array(
-            [[0.58, 0, 0.5, 0], [0, 1.92, 0.5, 0], [0, 0, 1, 0], [0, 0, 0, 1]],
+            [[0.5, 0, 0.5, 0], [0, 0.5, 0.5, 0], [0, 0, 1, 0], [0, 0, 0, 1]],
             dtype=np.float32)
 
         # self.full_res_shape = (1242, 375)
         self.full_res_shape = (1024, 540)
         self.idx = list(range(self.__len__()))
+        self.color_aug = transforms.ColorJitter(
+            self.brightness, self.contrast, self.saturation, self.hue)
+        self.load_sparse = True
 
     def __getitem__(self, index):
         """Returns a single training item from the dataset as a dictionary.
@@ -62,6 +67,7 @@ class UAVDataset(MonoDataset):
 
         line = self.filenames[index].split()
         folder = line[0]
+        seq = folder.split('/')[0]
 
         frame_index = int(line[1].rsplit('.', 1)[0])
         side = None
@@ -81,8 +87,8 @@ class UAVDataset(MonoDataset):
         for scale in range(self.num_scales):
             K = self.K.copy()
 
-            K[0, :] *= self.width // (2**scale)
-            K[1, :] *= self.height // (2**scale)
+            K[0, :] *= self.width // (2 ** scale)
+            K[1, :] *= self.height // (2 ** scale)
 
             inv_K = np.linalg.pinv(K)
 
@@ -90,8 +96,7 @@ class UAVDataset(MonoDataset):
             inputs[("inv_K", scale)] = torch.from_numpy(inv_K)
 
         if do_color_aug:
-            color_aug = transforms.ColorJitter.get_params(
-                self.brightness, self.contrast, self.saturation, self.hue)
+            color_aug = self.color_aug
         else:
             color_aug = (lambda x: x)
 
@@ -101,11 +106,36 @@ class UAVDataset(MonoDataset):
             del inputs[("color", i, -1)]
             del inputs[("color_aug", i, -1)]
 
-        if self.load_depth:
+        if self.load_depth and False:
             depth_gt = self.get_depth(folder, frame_index, side, do_flip)
             inputs["depth_gt"] = np.expand_dims(depth_gt, 0)
             inputs["depth_gt"] = torch.from_numpy(inputs["depth_gt"].astype(
                 np.float32))
+        if self.load_sparse:
+            sp_folder = seq + "/sparse"
+            sparse_depth = self.get_sparse(sp_folder, frame_index, side, do_flip)
+            height, width = np.where(sparse_depth > 0)
+            points = np.stack([width, height], axis=1)
+            depth = sparse_depth[height, width][np.newaxis, :]
+            new_points, new_sparse_depth = add_gausian_noise(points, depth, inputs[("K", 0)][:3, :3].numpy())
+            mask = np.logical_and.reduce(
+                [(new_points[:, 1] < self.height-5), (new_points[:, 1] > 5), (new_points[:, 0] < self.width-5),
+                 (new_points[:, 0] > 5)])
+            new_points = new_points[mask, :]
+            new_sparse_depth = new_sparse_depth[mask]
+            new_depth = np.zeros_like(sparse_depth)
+            new_depth[new_points[:, 1], new_points[:, 0]] = 1 / np.clip(new_sparse_depth[:, 0], 0.01, 500)
+            inputs['sparse'] = self.to_tensor(new_depth)
+            # image = np.array(self.get_color(folder, frame_index, side,
+            #                                   do_flip))
+            # image = cv2.resize(image,(self.width, self.height))
+            # for (y,x) in points:
+            #     image = cv2.circle(image, (y, x), 2, (0, 0, 255), -1)
+            # for (y, x) in new_points:
+            #     image = cv2.circle(image, (y, x), 2, (255, 0, 0), -1)
+            # image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+            # cv2.imshow('ii', image)
+            # cv2.waitKey(0)
 
         if "s" in self.frame_idxs:
             stereo_T = np.eye(4, dtype=np.float32)
@@ -126,7 +156,7 @@ class UAVDataset(MonoDataset):
 
         velo_filename = os.path.join(
             self.data_path, scene_name,
-            "velodyne_points/data/{:010d}.bin".format(int(frame_index)))
+            "depth/{:010d}.png".format(int(frame_index)))
 
         return os.path.isfile(velo_filename)
 
@@ -142,19 +172,35 @@ class UAVDataset(MonoDataset):
 
         return color
 
+    def get_sparse(self, folder, frame_index, side, do_flip):
+        f_str = "{:05d}.png".format(frame_index)
+        sparse_depth_path = os.path.join(
+            self.data_path,
+            folder,
+            f_str)
+
+        sparse_depth = pil.open(sparse_depth_path)
+        sparse_depth = sparse_depth.resize((self.width, self.height), pil.NEAREST)
+        sparse_depth = np.array(sparse_depth).astype(np.float32) / 1000.
+        if do_flip:
+            sparse_depth = np.fliplr(sparse_depth)
+
+        return sparse_depth
+
     # def get_depth(self, folder, frame_index, side, do_flip):
     #     f_str = "{:010d}.png".format(frame_index)
     #     depth_path = os.path.join(
     #         self.data_path,
     #         folder,
-    #         "proj_depth/groundtruth/image_0{}".format(self.side_map[side]),
+    #         "depth",
     #         f_str)
-
+    #
     #     depth_gt = pil.open(depth_path)
-    #     depth_gt = depth_gt.resize(self.full_res_shape, pil.NEAREST)
-    #     depth_gt = np.array(depth_gt).astype(np.float32) / 256
-
+    #     # depth_gt = depth_gt.resize(self.full_res_shape, pil.NEAREST)
+    #     depth_gt = depth_gt.resize((self.height, self.width), pil.NEAREST)
+    #     depth_gt = np.array(depth_gt).astype(np.float32) / 1000.
+    #
     #     if do_flip:
     #         depth_gt = np.fliplr(depth_gt)
-
+    #
     #     return depth_gt

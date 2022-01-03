@@ -67,7 +67,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     seqs = os.listdir(args.data_dir)
     seqs.sort()
-    ps = PixelSelector()
+    ps = PixelSelector(size=(960, 540))
 
     for seq in seqs:
         print(f'generate sparse depth for {seq}')

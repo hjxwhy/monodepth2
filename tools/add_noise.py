@@ -10,7 +10,8 @@ import open3d as o3d
 from scipy.spatial import Delaunay
 from scipy.interpolate import LinearNDInterpolator
 import time
-from utils.visualization_utils import colored_depthmap
+
+# from utils.visualization_utils import colored_depthmap
 
 np.random.seed(0)
 
@@ -120,10 +121,11 @@ def add_gausian_noise(key_points, depth, K):
     '''
 
     num_points, _ = key_points.shape
-    coord_noise = np.random.normal(0, 3., size=2 * num_points).reshape((num_points, 2))
+    # coord_noise = np.random.normal(0, 3., size=2 * num_points).reshape((num_points, 2))
     # print(coord_noise)
     depth_noise = np.random.normal(0, .45, num_points).reshape((num_points, 1)).transpose([1, 0])
-    key_points_perturb = key_points + coord_noise
+    # key_points_perturb = key_points + coord_noise
+    key_points_perturb = key_points
     # print(depth_noise.shape) + coord_noise
     homogeneous = np.ones([num_points, 1])
     key_points_perturb = np.concatenate([key_points_perturb, homogeneous], axis=1).transpose([1, 0])
@@ -135,14 +137,15 @@ def add_gausian_noise(key_points, depth, K):
 
     angle_noise = np.random.normal(0, .3, 3 * num_points).reshape((num_points, 3)) / 180. * np.pi
     R = euler_angles_to_rotation_matrix(angle_noise)
-    t_noise = np.random.normal(0, 0.01, (num_points, 3))
+    t_noise = np.random.normal(0, 0.1, (num_points, 3))
     pose_noise = (np.matmul(R, key_points_perturb_3d).squeeze() + t_noise).transpose([1, 0])
     # pose_noise = key_points_perturb_3d.squeeze().transpose([1, 0])
 
     coords_noise = np.matmul(K, pose_noise)
     # print(coords_noise)
     coords_noise = coords_noise / coords_noise[-1, :][np.newaxis, ...]
-    return coords_noise[:2, :].astype(np.int16).transpose([1, 0])
+    return coords_noise[:2, :].astype(np.int16).transpose([1, 0]), coords_noise[-1, :][np.newaxis, ...].transpose(
+        [1, 0])
     # print(coords_noise)
     # print(coords_noise[-1, :][np.newaxis, ...].shape)
 
@@ -234,7 +237,6 @@ class ScanNet:
 
         # color = cv2.imread('/home/hjx/Documents/ScanNet/scene0035_00/color/1350.jpg')
         # depth = np.array(Image.open('/home/hjx/Documents/ScanNet/scene0035_00/depth/1350.png'), dtype=np.float16)
-
 
         # print(self.color_paths[item])
         # print(self.depth_paths[item])
@@ -398,7 +400,7 @@ def pixel2cam(depth, pixel_coords, intrinsics, is_homogeneous=True):
     intrinsics = np.repeat(np.expand_dims(intrinsics, 0), repeats=batch, axis=0)
     cam_coords = np.matmul(np.linalg.inv(intrinsics), pixel_coords) * depth
     if is_homogeneous:
-        ones = np.ones([batch, 1, height*width])
+        ones = np.ones([batch, 1, height * width])
         cam_coords = np.concatenate([cam_coords, ones], axis=1)
     cam_coords = np.reshape(cam_coords, [batch, -1, height, width])
     return cam_coords
@@ -625,7 +627,7 @@ if __name__ == "__main__":
         # draw_keypoints(third_image, coord_perturb, (255, 0, 0))
         # vis_3d(cam_coord_perturb)
         inter_depth, succes = delaunay_triangular(coord_perturb, cam_coord_perturb, target_image, debug=True,
-                                          depth=key_points_depth)
+                                                  depth=key_points_depth)
         # vis_3d(cam_coord_perturb)
         if not succes:
             inter_depth = sparse_depth
