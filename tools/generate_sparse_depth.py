@@ -9,16 +9,16 @@ import os
 import cv2
 import argparse
 
-so_path = os.path.join(os.path.dirname(__file__), 'libtest.so')
-lib = ctypes.cdll.LoadLibrary(so_path)
-c_float_p = ctypes.POINTER(ctypes.c_float)
+# so_path = os.path.join(os.path.dirname(__file__), 'libtest.so')
+# lib = ctypes.cdll.LoadLibrary(so_path)
+# c_float_p = ctypes.POINTER(ctypes.c_float)
 
 
 class PixelSelector:
     def __init__(self, size=(640, 480)):
-        # self.so_path = os.path.join(os.path.dirname(__file__), 'libtest.so')
+        self.so_path = os.path.join(os.path.dirname(__file__), 'libtest.so')
         self.size = size
-        self.so_path = '/home/hjx/Indoor-SfMLearner/datasets/libtest.so'
+        # self.so_path = so_path
         self.lib = ctypes.cdll.LoadLibrary(self.so_path)
         self.c_float_p = ctypes.POINTER(ctypes.c_float)
 
@@ -63,7 +63,7 @@ class PixelSelector:
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_dir', required=False, default='/home/hjx/Documents/airsim_data')
-    parser.add_argument('--save', required=False, type=bool, default=True)
+    parser.add_argument('--save', action='store_true')
     args = parser.parse_args()
     seqs = os.listdir(args.data_dir)
     seqs.sort()
@@ -86,6 +86,8 @@ if __name__ == '__main__':
             else:
                 points = ps.extract_points(image)
                 points = points.astype(np.int16)
+                print(points.shape)
+
                 image = cv2.resize(image, ps.size)
                 for (y, x) in points:
                     image = cv2.circle(image, (x, y), 2, (255, 0, 255), -1)

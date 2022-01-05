@@ -265,6 +265,8 @@ class Trainer:
 
         self.generate_images_pred(inputs, outputs)
         losses = self.compute_losses(inputs, outputs)
+        if self.opt.semi_sup:
+            losses["loss"] += 0.1 * self.compute_sparse_loss(outputs[("disp", 0)], inputs["sparse"])
 
         return outputs, losses
 
@@ -411,6 +413,24 @@ class Trainer:
             reprojection_loss = 0.85 * ssim_loss + 0.15 * l1_loss
 
         return reprojection_loss
+
+    def compute_sparse_loss(self, pred, sparse_depth):
+        """Computes sparse_loss with noise depth
+        TODO:(Jianxin) There should be have a weight of the noise depth, but now don't have, one scale or multi scale still is still not sure, now is a scale
+        """
+        assert pred.dim() == sparse_depth.dim(), "inconsistent dimensions"
+        valid_mask = (sparse_depth > 0).detach()
+
+        num_valids = valid_mask.sum()
+        assert (num_valids > 100), 'training image has less than 100 valid pixels'
+        pred, _ = disp_to_depth(pred, self.opt.min_depth, self.opt.max_depth)
+
+        diff = pred - sparse_depth
+        diff = diff[valid_mask]
+
+        loss = diff.abs().mean()
+        return loss
+
 
     def compute_losses(self, inputs, outputs):
         """Compute the reprojection and smoothness losses for a minibatch

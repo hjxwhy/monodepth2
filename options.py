@@ -135,6 +135,9 @@ class MonodepthOptions:
                                  help="normal or shared",
                                  default="separate_resnet",
                                  choices=["posecnn", "separate_resnet", "shared"])
+        self.parser.add_argument("--semi_sup",
+                                 action="store_true",
+                                 help="supervise with sparse vo depth (sim data sparse depth are generate with noise)")
 
         # SYSTEM options
         self.parser.add_argument("--no_cuda",

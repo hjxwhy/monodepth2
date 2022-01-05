@@ -505,28 +505,29 @@ int main(int w, int h, float* image, int num, int max_num, float* result) {
 
     int numPointsTotal = makeMaps(image, map_out, 2000, 3, false, 1);
 
-//     std::cout << "total points " << numPointsTotal << std::endl;
+//    std::cout << "total points " << numPointsTotal << std::endl;
 //    for (int i=0; i<(w/32)*(h/32); i++) cout << gradHist[i]  << endl;
-    int* abs_hist = new int[50];
+    int* abs_hist = new int[100];
     int q=0;
-    memset(abs_hist,0,sizeof(int)*50);
-    for (int i =0; i < h; ++i) for (int j =0; j< w; ++j) {
-       if (absSquaredGrad[0][i*w + j] == 0) continue;
-       int g = sqrtf(absSquaredGrad[0][i*w + j]);
+    memset(abs_hist,0,sizeof(int)*100);
+    float * mapmax0 = absSquaredGrad[0];
+    for (int i = 2; i < h-2; i++) for (int j = 2; j < w-2; j++) {
+       if (mapmax0[i*w + j] <= 0) continue;
+       int g = sqrtf(mapmax0[i*w + j]);
        if (g > 48) g=48;
        abs_hist[g+1] ++;
        abs_hist[0] ++;
-       q = computeHistQuantil(abs_hist, 0.85);
     }
+    q = computeHistQuantil(abs_hist, 0.85);
+    if (q > 50) q = 1;
     q *= q;
 
     int n = 0;
-    for (int i = 0; i < h; ++i) for (int j = 0; j < w; ++j)
+    for (int i = 1; i < h-2; ++i) for (int j = 1; j < w-2; ++j)
     {
 
         if (map_out[i*w + j] != 0 && absSquaredGrad[0][i*w + j] > q){
 //            std::cout << i << " " << j << endl;
-//            cout << absSquaredGrad[0][i*w + j]  << endl;
             result[n*2] = i;
             result[n*2+1] = j;
             n += 1;
@@ -535,6 +536,7 @@ int main(int w, int h, float* image, int num, int max_num, float* result) {
     }
     // todo free memory
     delete []map_out;
+    delete []abs_hist;
     deleteImages();
     deleteSelector();
     return n;
