@@ -29,8 +29,6 @@ class UAVDataset(MonoDataset):
         # self.full_res_shape = (1242, 375)
         self.full_res_shape = (1024, 540)
         self.idx = list(range(self.__len__()))
-        self.color_aug = transforms.ColorJitter(
-            self.brightness, self.contrast, self.saturation, self.hue)
         self.load_sparse = True
 
     def __getitem__(self, index):
@@ -121,7 +119,7 @@ class UAVDataset(MonoDataset):
             new_points = new_points[mask, :]
             new_sparse_depth = new_sparse_depth[mask]
             new_depth = np.zeros_like(sparse_depth)
-            new_depth[new_points[:, 1], new_points[:, 0]] = 1 / np.clip(new_sparse_depth[:, 0], 0.01, 500)
+            new_depth[new_points[:, 1], new_points[:, 0]] = 1 / np.clip(new_sparse_depth[:, 0], 0., 200)
             inputs['sparse'] = self.to_tensor(new_depth)
             # image = np.array(self.get_color(folder, frame_index, side,
             #                                   do_flip))

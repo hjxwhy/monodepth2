@@ -6,7 +6,7 @@ import math
 from scipy.stats import exponnorm
 import cv2
 from PIL import Image
-import open3d as o3d
+# import open3d as o3d
 from scipy.spatial import Delaunay
 from scipy.interpolate import LinearNDInterpolator
 import time
@@ -143,8 +143,8 @@ def add_gausian_noise(key_points, depth, K):
 
     coords_noise = np.matmul(K, pose_noise)
     # print(coords_noise)
-    coords_noise = coords_noise / coords_noise[-1, :][np.newaxis, ...]
-    return coords_noise[:2, :].astype(np.int16).transpose([1, 0]), coords_noise[-1, :][np.newaxis, ...].transpose(
+    # coords_noise = coords_noise / coords_noise[-1, :][np.newaxis, ...]
+    return (coords_noise[:2, :] / coords_noise[-1:, :]).astype(np.int16).transpose([1, 0]), coords_noise[-1:, :].transpose(
         [1, 0])
     # print(coords_noise)
     # print(coords_noise[-1, :][np.newaxis, ...].shape)
