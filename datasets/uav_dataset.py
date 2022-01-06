@@ -57,11 +57,11 @@ class UAVDataset(MonoDataset):
             2       images resized to (self.width // 4, self.height // 4)
             3       images resized to (self.width // 8, self.height // 8)
         """
-        if index == 0:
-            random.shuffle(self.idx)
-        inputs = {}
+        if self.is_train:
+            if index == 0:
+                random.shuffle(self.idx)
         index = self.idx[index]
-
+        inputs = {}
         do_color_aug = self.is_train and random.random() > 0.5
         do_flip = self.is_train and random.random() > 0.5
 
@@ -106,14 +106,11 @@ class UAVDataset(MonoDataset):
             del inputs[("color", i, -1)]
             del inputs[("color_aug", i, -1)]
 
-        if self.load_depth and False:
-            depth_gt = self.get_depth(folder, frame_index, side, do_flip)
-            inputs["depth_gt"] = np.expand_dims(depth_gt, 0)
-            inputs["depth_gt"] = torch.from_numpy(inputs["depth_gt"].astype(
-                np.float32))
+        if self.load_depth and not self.is_train:
+            depth_gt = self.get_depth(seq, frame_index, side, do_flip)
+            inputs["depth_gt"] = self.to_tensor(depth_gt)
         if self.load_sparse:
-            sp_folder = seq + "/sparse"
-            sparse_depth = self.get_sparse(sp_folder, frame_index, side, do_flip)
+            sparse_depth = self.get_sparse(seq, frame_index, side, do_flip)
             height, width = np.where(sparse_depth > 0)
             points = np.stack([width, height], axis=1)
             depth = sparse_depth[height, width][np.newaxis, :]
@@ -151,13 +148,12 @@ class UAVDataset(MonoDataset):
         if len(self.filenames) == 0:
             return False
         line = self.filenames[0].split()
-        scene_name = line[0]
+        scene_name = line[0].split('/')[0]
         frame_index = int(line[1].rsplit('.', 1)[0])
 
         velo_filename = os.path.join(
             self.data_path, scene_name,
-            "depth/{:010d}.png".format(int(frame_index)))
-
+            "depth/{:05d}.png".format(int(frame_index)))
         return os.path.isfile(velo_filename)
 
     def get_image_path(self, folder, frame_index):
@@ -177,30 +173,30 @@ class UAVDataset(MonoDataset):
         sparse_depth_path = os.path.join(
             self.data_path,
             folder,
+            'sparse',
             f_str)
 
         sparse_depth = pil.open(sparse_depth_path)
         sparse_depth = sparse_depth.resize((self.width, self.height), pil.NEAREST)
-        sparse_depth = np.array(sparse_depth).astype(np.float32) / 1000.
+        sparse_depth = np.array(sparse_depth).astype(np.float32) / 255.
         if do_flip:
             sparse_depth = np.fliplr(sparse_depth)
 
         return sparse_depth
 
-    # def get_depth(self, folder, frame_index, side, do_flip):
-    #     f_str = "{:010d}.png".format(frame_index)
-    #     depth_path = os.path.join(
-    #         self.data_path,
-    #         folder,
-    #         "depth",
-    #         f_str)
-    #
-    #     depth_gt = pil.open(depth_path)
-    #     # depth_gt = depth_gt.resize(self.full_res_shape, pil.NEAREST)
-    #     depth_gt = depth_gt.resize((self.height, self.width), pil.NEAREST)
-    #     depth_gt = np.array(depth_gt).astype(np.float32) / 1000.
-    #
-    #     if do_flip:
-    #         depth_gt = np.fliplr(depth_gt)
-    #
-    #     return depth_gt
+    def get_depth(self, folder, frame_index, side, do_flip):
+        f_str = "{:05d}.png".format(frame_index)
+        depth_path = os.path.join(
+            self.data_path,
+            folder,
+            "depth",
+            f_str)
+        depth_gt = pil.open(depth_path)
+        # depth_gt = depth_gt.resize(self.full_res_shape, pil.NEAREST)
+        depth_gt = depth_gt.resize((self.width, self.height), pil.NEAREST)
+        depth_gt = np.array(depth_gt).astype(np.float32) / 255.
+
+        if do_flip:
+            depth_gt = np.fliplr(depth_gt)
+
+        return depth_gt

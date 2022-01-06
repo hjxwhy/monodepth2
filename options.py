@@ -85,6 +85,10 @@ class MonodepthOptions:
         self.parser.add_argument("--use_sparse",
                                  help="use sparse depth for depth completion",
                                  action="store_true")
+        self.parser.add_argument("--sparse_weight",
+                                 help="the weight of the sparse sup",
+                                 type=float,
+                                 default=1.0)
 
         # OPTIMIZATION options
         self.parser.add_argument("--batch_size",
@@ -189,7 +193,7 @@ class MonodepthOptions:
                                  type=str,
                                  default="eigen",
                                  choices=[
-                                    "eigen", "eigen_benchmark", "benchmark", "odom_9", "odom_10", "sim"],
+                                    "eigen", "eigen_benchmark", "benchmark", "odom_9", "odom_10", "sim", "africa"],
                                  help="which split to run eval on")
         self.parser.add_argument("--save_pred_disps",
                                  help="if set saves predicted disparities",

@@ -191,6 +191,7 @@ class Trainer:
         self.start_time = time.time()
         for self.epoch in range(self.opt.num_epochs):
             self.run_epoch()
+            self.val()
             if (self.epoch + 1) % self.opt.save_frequency == 0:
                 self.save_model()
 
@@ -266,7 +267,7 @@ class Trainer:
         self.generate_images_pred(inputs, outputs)
         losses = self.compute_losses(inputs, outputs)
         if self.opt.semi_sup:
-            losses["loss"] += 0.1 * self.compute_sparse_loss(outputs[("disp", 0)], inputs["sparse"])
+            losses["loss"] += self.opt.sparse_weight * self.compute_sparse_loss(outputs[("disp", 0)], inputs["sparse"])
 
         return outputs, losses
 
@@ -431,7 +432,6 @@ class Trainer:
         loss = diff.abs().mean()
         return loss
 
-
     def compute_losses(self, inputs, outputs):
         """Compute the reprojection and smoothness losses for a minibatch
         """
@@ -530,23 +530,27 @@ class Trainer:
         so is only used to give an indication of validation performance
         """
         depth_pred = outputs[("depth", 0, 0)]
-        depth_pred = torch.clamp(F.interpolate(
-            depth_pred, [375, 1242], mode="bilinear", align_corners=False), 1e-3, 80)
+        depth_pred = torch.nn.functional.interpolate(depth_pred, inputs['depth_gt'].shape[-2:], mode='bilinear',
+                                                     align_corners=True)
+        # depth_pred = torch.clamp(F.interpolate(
+        #     depth_pred, [375, 1242], mode="bilinear", align_corners=False), 1e-3, 80)
         depth_pred = depth_pred.detach()
 
         depth_gt = inputs["depth_gt"]
         mask = depth_gt > 0
 
         # garg/eigen crop
-        crop_mask = torch.zeros_like(mask)
-        crop_mask[:, :, 153:371, 44:1197] = 1
-        mask = mask * crop_mask
+        if 'kitti' in self.opt.dataset:
+            crop_mask = torch.zeros_like(mask)
+            crop_mask[:, :, 153:371, 44:1197] = 1
+            mask = mask * crop_mask
 
         depth_gt = depth_gt[mask]
         depth_pred = depth_pred[mask]
-        depth_pred *= torch.median(depth_gt) / torch.median(depth_pred)
+        if not self.opt.use_sparse:
+            depth_pred *= torch.median(depth_gt) / torch.median(depth_pred)
 
-        depth_pred = torch.clamp(depth_pred, min=1e-3, max=80)
+        depth_pred = torch.clamp(depth_pred, min=self.opt.min_depth, max=self.opt.max_depth)
 
         depth_errors = compute_depth_errors(depth_gt, depth_pred)
 
